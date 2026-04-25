@@ -1,0 +1,2 @@
+bank_transaction_id,bank_account_id,receipt_date,bank_reference,amount,currency
+BANK999,MERCHANT-GBP-001,2026-04-22,PSP PAYOUT BATCH-20260421-001,99.99,GBP
