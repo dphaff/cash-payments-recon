@@ -2,6 +2,7 @@ import argparse
 
 from cash_recon import __version__
 from cash_recon.io.internal_events import load_internal_events
+from cash_recon.io.psp_settlement import load_psp_settlement
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,6 +30,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the internal events CSV file.",
     )
 
+    validate_psp_parser = subparsers.add_parser(
+        "validate-psp",
+        help="Validate a PSP settlement CSV file.",
+    )
+
+    validate_psp_parser.add_argument(
+        "--psp",
+        required=True,
+        help="Path to the PSP settlement CSV file.",
+    )
+
     return parser
 
 
@@ -48,6 +60,16 @@ def main() -> None:
             raise SystemExit(1)
 
         print(f"Internal file valid: {len(events)} rows")
+        return
+
+    if args.command == "validate-psp":
+        try:
+            rows = load_psp_settlement(args.psp)
+        except ValueError as error:
+            print(f"PSP file invalid: {error}")
+            raise SystemExit(1)
+
+        print(f"PSP file valid: {len(rows)} rows")
         return
 
     parser.print_help()
