@@ -6,11 +6,18 @@ from cash_recon.io.internal_events import load_internal_events
 from cash_recon.io.psp_settlement import load_psp_settlement
 from cash_recon.recon.internal_psp import (
     INTERNAL_MISSING_IN_PSP,
-    MATCHED,
+    MATCHED as INTERNAL_PSP_MATCHED,
     PSP_MISSING_IN_INTERNAL,
     count_psp_fee_rows,
     reconcile_internal_to_psp,
     summarise_internal_psp_results,
+)
+from cash_recon.recon.psp_bank import (
+    BANK_RECEIPT_MISSING_EXPECTED_PAYOUT,
+    EXPECTED_PAYOUT_MISSING_IN_BANK,
+    MATCHED as PSP_BANK_MATCHED,
+    reconcile_psp_batches_to_bank,
+    summarise_psp_bank_results,
 )
 from cash_recon.recon.psp_batches import derive_psp_batch_totals
 
@@ -33,7 +40,6 @@ def build_parser() -> argparse.ArgumentParser:
         "validate-internal",
         help="Validate an internal events CSV file.",
     )
-
     validate_internal_parser.add_argument(
         "--internal",
         required=True,
@@ -44,7 +50,6 @@ def build_parser() -> argparse.ArgumentParser:
         "validate-psp",
         help="Validate a PSP settlement CSV file.",
     )
-
     validate_psp_parser.add_argument(
         "--psp",
         required=True,
@@ -55,7 +60,6 @@ def build_parser() -> argparse.ArgumentParser:
         "validate-bank",
         help="Validate a bank receipts CSV file.",
     )
-
     validate_bank_parser.add_argument(
         "--bank",
         required=True,
@@ -66,13 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
         "reconcile-internal-psp",
         help="Reconcile internal events to PSP settlement detail.",
     )
-
     reconcile_internal_psp_parser.add_argument(
         "--internal",
         required=True,
         help="Path to the internal events CSV file.",
     )
-
     reconcile_internal_psp_parser.add_argument(
         "--psp",
         required=True,
@@ -83,11 +85,25 @@ def build_parser() -> argparse.ArgumentParser:
         "derive-psp-batches",
         help="Derive expected PSP settlement batch totals.",
     )
-
     derive_psp_batches_parser.add_argument(
         "--psp",
         required=True,
         help="Path to the PSP settlement CSV file.",
+    )
+
+    reconcile_psp_bank_parser = subparsers.add_parser(
+        "reconcile-psp-bank",
+        help="Reconcile PSP expected batch payouts to bank receipts.",
+    )
+    reconcile_psp_bank_parser.add_argument(
+        "--psp",
+        required=True,
+        help="Path to the PSP settlement CSV file.",
+    )
+    reconcile_psp_bank_parser.add_argument(
+        "--bank",
+        required=True,
+        help="Path to the bank receipts CSV file.",
     )
 
     return parser
@@ -148,7 +164,7 @@ def main() -> None:
         psp_fee_rows_ignored = count_psp_fee_rows(psp_rows)
 
         print("Internal to PSP reconciliation complete")
-        print(f"Matched: {summary[MATCHED]}")
+        print(f"Matched: {summary[INTERNAL_PSP_MATCHED]}")
         print(f"Internal missing in PSP: {summary[INTERNAL_MISSING_IN_PSP]}")
         print(f"PSP missing in internal: {summary[PSP_MISSING_IN_INTERNAL]}")
         print(f"PSP fee rows ignored: {psp_fee_rows_ignored}")
@@ -171,6 +187,34 @@ def main() -> None:
             print(f"Transaction rows: {batch.transaction_count}")
             print(f"Expected payout amount: {batch.expected_payout_amount}")
 
+        return
+
+    if args.command == "reconcile-psp-bank":
+        try:
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+            batch_totals = derive_psp_batch_totals(psp_rows)
+        except ValueError as error:
+            print(f"Input file invalid: {error}")
+            raise SystemExit(1)
+
+        results = reconcile_psp_batches_to_bank(
+            batch_totals=batch_totals,
+            bank_receipts=bank_receipts,
+        )
+
+        summary = summarise_psp_bank_results(results)
+
+        print("PSP to bank reconciliation complete")
+        print(f"Matched: {summary[PSP_BANK_MATCHED]}")
+        print(
+            "Expected payout missing in bank: "
+            f"{summary[EXPECTED_PAYOUT_MISSING_IN_BANK]}"
+        )
+        print(
+            "Bank receipt missing expected payout: "
+            f"{summary[BANK_RECEIPT_MISSING_EXPECTED_PAYOUT]}"
+        )
         return
 
     parser.print_help()
