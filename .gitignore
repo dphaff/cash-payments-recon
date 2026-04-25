@@ -26,3 +26,9 @@ outputs/
 
 # VSCode
 .vscode/
+
+# Local database files
+data/
+*.db
+*.sqlite
+*.sqlite3

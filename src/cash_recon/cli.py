@@ -1,6 +1,7 @@
 import argparse
 
 from cash_recon import __version__
+from cash_recon.db import initialise_database, record_run
 from cash_recon.exceptions import classify_all_exceptions
 from cash_recon.io.bank_receipts import load_bank_receipts
 from cash_recon.io.internal_events import load_internal_events
@@ -125,6 +126,37 @@ def build_parser() -> argparse.ArgumentParser:
         "--bank",
         required=True,
         help="Path to the bank receipts CSV file.",
+    )
+
+    init_db_parser = subparsers.add_parser(
+        "init-db",
+        help="Initialise the SQLite database.",
+    )
+    init_db_parser.add_argument(
+        "--db",
+        required=True,
+        help="Path to the SQLite database file.",
+    )
+
+    record_run_parser = subparsers.add_parser(
+        "record-run",
+        help="Record a reconciliation run in the database.",
+    )
+    record_run_parser.add_argument(
+        "--db",
+        required=True,
+        help="Path to the SQLite database file.",
+    )
+    record_run_parser.add_argument(
+        "--run-id",
+        required=True,
+        help="Unique run identifier.",
+    )
+    record_run_parser.add_argument(
+        "--status",
+        required=True,
+        choices=["SUCCESS", "FAILED"],
+        help="Run status.",
     )
 
     return parser
@@ -276,6 +308,25 @@ def main() -> None:
             print(f"Amount: {exception.amount}")
             print(f"Description: {exception.description}")
 
+        return
+
+    if args.command == "init-db":
+        initialise_database(args.db)
+        print(f"Database initialised: {args.db}")
+        return
+
+    if args.command == "record-run":
+        try:
+            record_run(
+                db_path=args.db,
+                run_id=args.run_id,
+                status=args.status,
+            )
+        except ValueError as error:
+            print(f"Run record failed: {error}")
+            raise SystemExit(1)
+
+        print(f"Run recorded: {args.run_id}")
         return
 
     parser.print_help()
