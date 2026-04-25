@@ -8,7 +8,9 @@ version = "0.1.0"
 description = "A daily cash and payments reconciliation pipeline for portfolio demonstration."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "openpyxl>=3.1.0",
+]
 
 [project.optional-dependencies]
 dev = [

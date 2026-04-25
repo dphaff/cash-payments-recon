@@ -7,10 +7,12 @@ from cash_recon.db import (
     persist_exceptions,
     record_run,
 )
+from cash_recon.excel import write_excel_workbook
 from cash_recon.exceptions import classify_all_exceptions
 from cash_recon.io.bank_receipts import load_bank_receipts
 from cash_recon.io.internal_events import load_internal_events
 from cash_recon.io.psp_settlement import load_psp_settlement
+from cash_recon.mi import build_mi_summary, write_mi_summary_report
 from cash_recon.outputs import (
     build_run_output_dir,
     write_exceptions_report,
@@ -53,192 +55,111 @@ def build_parser() -> argparse.ArgumentParser:
         "validate-internal",
         help="Validate an internal events CSV file.",
     )
-    validate_internal_parser.add_argument(
-        "--internal",
-        required=True,
-        help="Path to the internal events CSV file.",
-    )
+    validate_internal_parser.add_argument("--internal", required=True)
 
     validate_psp_parser = subparsers.add_parser(
         "validate-psp",
         help="Validate a PSP settlement CSV file.",
     )
-    validate_psp_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
+    validate_psp_parser.add_argument("--psp", required=True)
 
     validate_bank_parser = subparsers.add_parser(
         "validate-bank",
         help="Validate a bank receipts CSV file.",
     )
-    validate_bank_parser.add_argument(
-        "--bank",
-        required=True,
-        help="Path to the bank receipts CSV file.",
-    )
+    validate_bank_parser.add_argument("--bank", required=True)
 
     reconcile_internal_psp_parser = subparsers.add_parser(
         "reconcile-internal-psp",
         help="Reconcile internal events to PSP settlement detail.",
     )
-    reconcile_internal_psp_parser.add_argument(
-        "--internal",
-        required=True,
-        help="Path to the internal events CSV file.",
-    )
-    reconcile_internal_psp_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
+    reconcile_internal_psp_parser.add_argument("--internal", required=True)
+    reconcile_internal_psp_parser.add_argument("--psp", required=True)
 
     derive_psp_batches_parser = subparsers.add_parser(
         "derive-psp-batches",
         help="Derive expected PSP settlement batch totals.",
     )
-    derive_psp_batches_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
+    derive_psp_batches_parser.add_argument("--psp", required=True)
 
     reconcile_psp_bank_parser = subparsers.add_parser(
         "reconcile-psp-bank",
         help="Reconcile PSP expected batch payouts to bank receipts.",
     )
-    reconcile_psp_bank_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
-    reconcile_psp_bank_parser.add_argument(
-        "--bank",
-        required=True,
-        help="Path to the bank receipts CSV file.",
-    )
+    reconcile_psp_bank_parser.add_argument("--psp", required=True)
+    reconcile_psp_bank_parser.add_argument("--bank", required=True)
 
     classify_exceptions_parser = subparsers.add_parser(
         "classify-exceptions",
         help="Classify reconciliation exceptions across all stages.",
     )
-    classify_exceptions_parser.add_argument(
-        "--internal",
-        required=True,
-        help="Path to the internal events CSV file.",
-    )
-    classify_exceptions_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
-    classify_exceptions_parser.add_argument(
-        "--bank",
-        required=True,
-        help="Path to the bank receipts CSV file.",
-    )
+    classify_exceptions_parser.add_argument("--internal", required=True)
+    classify_exceptions_parser.add_argument("--psp", required=True)
+    classify_exceptions_parser.add_argument("--bank", required=True)
 
     init_db_parser = subparsers.add_parser(
         "init-db",
         help="Initialise the SQLite database.",
     )
-    init_db_parser.add_argument(
-        "--db",
-        required=True,
-        help="Path to the SQLite database file.",
-    )
+    init_db_parser.add_argument("--db", required=True)
 
     record_run_parser = subparsers.add_parser(
         "record-run",
         help="Record a reconciliation run in the database.",
     )
-    record_run_parser.add_argument(
-        "--db",
-        required=True,
-        help="Path to the SQLite database file.",
-    )
-    record_run_parser.add_argument(
-        "--run-id",
-        required=True,
-        help="Unique run identifier.",
-    )
+    record_run_parser.add_argument("--db", required=True)
+    record_run_parser.add_argument("--run-id", required=True)
     record_run_parser.add_argument(
         "--status",
         required=True,
         choices=["SUCCESS", "FAILED"],
-        help="Run status.",
     )
 
     persist_exceptions_parser = subparsers.add_parser(
         "persist-exceptions",
         help="Classify and persist reconciliation exceptions.",
     )
-    persist_exceptions_parser.add_argument(
-        "--db",
-        required=True,
-        help="Path to the SQLite database file.",
-    )
-    persist_exceptions_parser.add_argument(
-        "--run-id",
-        required=True,
-        help="Unique run identifier.",
-    )
-    persist_exceptions_parser.add_argument(
-        "--internal",
-        required=True,
-        help="Path to the internal events CSV file.",
-    )
-    persist_exceptions_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
-    persist_exceptions_parser.add_argument(
-        "--bank",
-        required=True,
-        help="Path to the bank receipts CSV file.",
-    )
+    persist_exceptions_parser.add_argument("--db", required=True)
+    persist_exceptions_parser.add_argument("--run-id", required=True)
+    persist_exceptions_parser.add_argument("--internal", required=True)
+    persist_exceptions_parser.add_argument("--psp", required=True)
+    persist_exceptions_parser.add_argument("--bank", required=True)
 
     list_open_exceptions_parser = subparsers.add_parser(
         "list-open-exceptions",
         help="List open exceptions with ageing.",
     )
-    list_open_exceptions_parser.add_argument(
-        "--db",
-        required=True,
-        help="Path to the SQLite database file.",
-    )
+    list_open_exceptions_parser.add_argument("--db", required=True)
 
     export_reports_parser = subparsers.add_parser(
         "export-reports",
         help="Export reconciliation reports as CSV files.",
     )
-    export_reports_parser.add_argument(
-        "--run-id",
-        required=True,
-        help="Unique run identifier.",
+    export_reports_parser.add_argument("--run-id", required=True)
+    export_reports_parser.add_argument("--internal", required=True)
+    export_reports_parser.add_argument("--psp", required=True)
+    export_reports_parser.add_argument("--bank", required=True)
+    export_reports_parser.add_argument("--outdir", required=True)
+
+    export_mi_summary_parser = subparsers.add_parser(
+        "export-mi-summary",
+        help="Export daily MI summary as a CSV file.",
     )
-    export_reports_parser.add_argument(
-        "--internal",
-        required=True,
-        help="Path to the internal events CSV file.",
+    export_mi_summary_parser.add_argument("--run-id", required=True)
+    export_mi_summary_parser.add_argument("--internal", required=True)
+    export_mi_summary_parser.add_argument("--psp", required=True)
+    export_mi_summary_parser.add_argument("--bank", required=True)
+    export_mi_summary_parser.add_argument("--outdir", required=True)
+
+    export_excel_parser = subparsers.add_parser(
+        "export-excel",
+        help="Export reconciliation report as an Excel workbook.",
     )
-    export_reports_parser.add_argument(
-        "--psp",
-        required=True,
-        help="Path to the PSP settlement CSV file.",
-    )
-    export_reports_parser.add_argument(
-        "--bank",
-        required=True,
-        help="Path to the bank receipts CSV file.",
-    )
-    export_reports_parser.add_argument(
-        "--outdir",
-        required=True,
-        help="Output directory for report files.",
-    )
+    export_excel_parser.add_argument("--run-id", required=True)
+    export_excel_parser.add_argument("--internal", required=True)
+    export_excel_parser.add_argument("--psp", required=True)
+    export_excel_parser.add_argument("--bank", required=True)
+    export_excel_parser.add_argument("--outdir", required=True)
 
     return parser
 
@@ -529,6 +450,113 @@ def main() -> None:
         print(f"Internal to PSP report: {internal_psp_report}")
         print(f"PSP to bank report: {psp_bank_report}")
         print(f"Exceptions report: {exceptions_report}")
+        return
+
+    if args.command == "export-mi-summary":
+        try:
+            internal_events = load_internal_events(args.internal)
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+
+            batch_totals = derive_psp_batch_totals(psp_rows)
+
+            internal_psp_results = reconcile_internal_to_psp(
+                internal_events=internal_events,
+                psp_rows=psp_rows,
+            )
+
+            psp_bank_results = reconcile_psp_batches_to_bank(
+                batch_totals=batch_totals,
+                bank_receipts=bank_receipts,
+            )
+
+            exceptions = classify_all_exceptions(
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+            )
+
+            mi_summary = build_mi_summary(
+                run_id=args.run_id,
+                internal_events=internal_events,
+                psp_rows=psp_rows,
+                bank_receipts=bank_receipts,
+                batch_totals=batch_totals,
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+                exceptions=exceptions,
+            )
+
+            output_dir = build_run_output_dir(
+                outdir=args.outdir,
+                run_id=args.run_id,
+            )
+
+            mi_summary_report = write_mi_summary_report(
+                output_dir=output_dir,
+                summary=mi_summary,
+            )
+
+        except ValueError as error:
+            print(f"MI summary export failed: {error}")
+            raise SystemExit(1)
+
+        print("MI summary exported")
+        print(f"Output file: {mi_summary_report}")
+        return
+
+    if args.command == "export-excel":
+        try:
+            internal_events = load_internal_events(args.internal)
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+
+            batch_totals = derive_psp_batch_totals(psp_rows)
+
+            internal_psp_results = reconcile_internal_to_psp(
+                internal_events=internal_events,
+                psp_rows=psp_rows,
+            )
+
+            psp_bank_results = reconcile_psp_batches_to_bank(
+                batch_totals=batch_totals,
+                bank_receipts=bank_receipts,
+            )
+
+            exceptions = classify_all_exceptions(
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+            )
+
+            mi_summary = build_mi_summary(
+                run_id=args.run_id,
+                internal_events=internal_events,
+                psp_rows=psp_rows,
+                bank_receipts=bank_receipts,
+                batch_totals=batch_totals,
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+                exceptions=exceptions,
+            )
+
+            output_dir = build_run_output_dir(
+                outdir=args.outdir,
+                run_id=args.run_id,
+            )
+
+            excel_workbook = write_excel_workbook(
+                output_dir=output_dir,
+                mi_summary=mi_summary,
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+                exceptions=exceptions,
+            )
+
+        except ValueError as error:
+            print(f"Excel export failed: {error}")
+            raise SystemExit(1)
+
+        print("Excel workbook exported")
+        print(f"Output file: {excel_workbook}")
         return
 
     parser.print_help()
