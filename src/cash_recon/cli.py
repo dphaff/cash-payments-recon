@@ -12,6 +12,7 @@ from cash_recon.recon.internal_psp import (
     reconcile_internal_to_psp,
     summarise_internal_psp_results,
 )
+from cash_recon.recon.psp_batches import derive_psp_batch_totals
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,6 +74,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     reconcile_internal_psp_parser.add_argument(
+        "--psp",
+        required=True,
+        help="Path to the PSP settlement CSV file.",
+    )
+
+    derive_psp_batches_parser = subparsers.add_parser(
+        "derive-psp-batches",
+        help="Derive expected PSP settlement batch totals.",
+    )
+
+    derive_psp_batches_parser.add_argument(
         "--psp",
         required=True,
         help="Path to the PSP settlement CSV file.",
@@ -140,6 +152,25 @@ def main() -> None:
         print(f"Internal missing in PSP: {summary[INTERNAL_MISSING_IN_PSP]}")
         print(f"PSP missing in internal: {summary[PSP_MISSING_IN_INTERNAL]}")
         print(f"PSP fee rows ignored: {psp_fee_rows_ignored}")
+        return
+
+    if args.command == "derive-psp-batches":
+        try:
+            psp_rows = load_psp_settlement(args.psp)
+            batch_totals = derive_psp_batch_totals(psp_rows)
+        except ValueError as error:
+            print(f"PSP batch derivation failed: {error}")
+            raise SystemExit(1)
+
+        print("PSP batch totals derived")
+
+        for batch in batch_totals:
+            print(f"Batch: {batch.settlement_batch_id}")
+            print(f"Settlement date: {batch.settlement_date}")
+            print(f"Currency: {batch.currency}")
+            print(f"Transaction rows: {batch.transaction_count}")
+            print(f"Expected payout amount: {batch.expected_payout_amount}")
+
         return
 
     parser.print_help()
