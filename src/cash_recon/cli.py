@@ -11,6 +11,12 @@ from cash_recon.exceptions import classify_all_exceptions
 from cash_recon.io.bank_receipts import load_bank_receipts
 from cash_recon.io.internal_events import load_internal_events
 from cash_recon.io.psp_settlement import load_psp_settlement
+from cash_recon.outputs import (
+    build_run_output_dir,
+    write_exceptions_report,
+    write_internal_psp_report,
+    write_psp_bank_report,
+)
 from cash_recon.recon.internal_psp import (
     INTERNAL_MISSING_IN_PSP,
     MATCHED as INTERNAL_PSP_MATCHED,
@@ -202,6 +208,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--db",
         required=True,
         help="Path to the SQLite database file.",
+    )
+
+    export_reports_parser = subparsers.add_parser(
+        "export-reports",
+        help="Export reconciliation reports as CSV files.",
+    )
+    export_reports_parser.add_argument(
+        "--run-id",
+        required=True,
+        help="Unique run identifier.",
+    )
+    export_reports_parser.add_argument(
+        "--internal",
+        required=True,
+        help="Path to the internal events CSV file.",
+    )
+    export_reports_parser.add_argument(
+        "--psp",
+        required=True,
+        help="Path to the PSP settlement CSV file.",
+    )
+    export_reports_parser.add_argument(
+        "--bank",
+        required=True,
+        help="Path to the bank receipts CSV file.",
+    )
+    export_reports_parser.add_argument(
+        "--outdir",
+        required=True,
+        help="Output directory for report files.",
     )
 
     return parser
@@ -439,6 +475,60 @@ def main() -> None:
             print(f"Age bucket: {exception['age_bucket']}")
             print("---")
 
+        return
+
+    if args.command == "export-reports":
+        try:
+            internal_events = load_internal_events(args.internal)
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+
+            batch_totals = derive_psp_batch_totals(psp_rows)
+
+            internal_psp_results = reconcile_internal_to_psp(
+                internal_events=internal_events,
+                psp_rows=psp_rows,
+            )
+
+            psp_bank_results = reconcile_psp_batches_to_bank(
+                batch_totals=batch_totals,
+                bank_receipts=bank_receipts,
+            )
+
+            exceptions = classify_all_exceptions(
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+            )
+
+            output_dir = build_run_output_dir(
+                outdir=args.outdir,
+                run_id=args.run_id,
+            )
+
+            internal_psp_report = write_internal_psp_report(
+                output_dir=output_dir,
+                results=internal_psp_results,
+            )
+
+            psp_bank_report = write_psp_bank_report(
+                output_dir=output_dir,
+                results=psp_bank_results,
+            )
+
+            exceptions_report = write_exceptions_report(
+                output_dir=output_dir,
+                exceptions=exceptions,
+            )
+
+        except ValueError as error:
+            print(f"Report export failed: {error}")
+            raise SystemExit(1)
+
+        print("Reports exported")
+        print(f"Output folder: {output_dir}")
+        print(f"Internal to PSP report: {internal_psp_report}")
+        print(f"PSP to bank report: {psp_bank_report}")
+        print(f"Exceptions report: {exceptions_report}")
         return
 
     parser.print_help()
