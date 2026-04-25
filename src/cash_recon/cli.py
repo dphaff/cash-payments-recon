@@ -1,7 +1,12 @@
 import argparse
 
 from cash_recon import __version__
-from cash_recon.db import initialise_database, record_run
+from cash_recon.db import (
+    fetch_open_exceptions_with_ageing,
+    initialise_database,
+    persist_exceptions,
+    record_run,
+)
 from cash_recon.exceptions import classify_all_exceptions
 from cash_recon.io.bank_receipts import load_bank_receipts
 from cash_recon.io.internal_events import load_internal_events
@@ -157,6 +162,46 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=["SUCCESS", "FAILED"],
         help="Run status.",
+    )
+
+    persist_exceptions_parser = subparsers.add_parser(
+        "persist-exceptions",
+        help="Classify and persist reconciliation exceptions.",
+    )
+    persist_exceptions_parser.add_argument(
+        "--db",
+        required=True,
+        help="Path to the SQLite database file.",
+    )
+    persist_exceptions_parser.add_argument(
+        "--run-id",
+        required=True,
+        help="Unique run identifier.",
+    )
+    persist_exceptions_parser.add_argument(
+        "--internal",
+        required=True,
+        help="Path to the internal events CSV file.",
+    )
+    persist_exceptions_parser.add_argument(
+        "--psp",
+        required=True,
+        help="Path to the PSP settlement CSV file.",
+    )
+    persist_exceptions_parser.add_argument(
+        "--bank",
+        required=True,
+        help="Path to the bank receipts CSV file.",
+    )
+
+    list_open_exceptions_parser = subparsers.add_parser(
+        "list-open-exceptions",
+        help="List open exceptions with ageing.",
+    )
+    list_open_exceptions_parser.add_argument(
+        "--db",
+        required=True,
+        help="Path to the SQLite database file.",
     )
 
     return parser
@@ -327,6 +372,73 @@ def main() -> None:
             raise SystemExit(1)
 
         print(f"Run recorded: {args.run_id}")
+        return
+
+    if args.command == "persist-exceptions":
+        try:
+            internal_events = load_internal_events(args.internal)
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+
+            batch_totals = derive_psp_batch_totals(psp_rows)
+
+            internal_psp_results = reconcile_internal_to_psp(
+                internal_events=internal_events,
+                psp_rows=psp_rows,
+            )
+
+            psp_bank_results = reconcile_psp_batches_to_bank(
+                batch_totals=batch_totals,
+                bank_receipts=bank_receipts,
+            )
+
+            exceptions = classify_all_exceptions(
+                internal_psp_results=internal_psp_results,
+                psp_bank_results=psp_bank_results,
+            )
+
+            record_run(
+                db_path=args.db,
+                run_id=args.run_id,
+                status="SUCCESS",
+            )
+
+            inserted_count = persist_exceptions(
+                db_path=args.db,
+                run_id=args.run_id,
+                exceptions=exceptions,
+            )
+
+        except ValueError as error:
+            print(f"Persist exceptions failed: {error}")
+            raise SystemExit(1)
+
+        print("Exceptions persisted")
+        print(f"Run ID: {args.run_id}")
+        print(f"Exceptions inserted: {inserted_count}")
+        return
+
+    if args.command == "list-open-exceptions":
+        open_exceptions = fetch_open_exceptions_with_ageing(args.db)
+
+        print("Open exceptions")
+
+        if not open_exceptions:
+            print("No open exceptions")
+            return
+
+        for exception in open_exceptions:
+            print(f"Exception ID: {exception['exception_id']}")
+            print(f"Run ID: {exception['run_id']}")
+            print(f"Type: {exception['exception_type']}")
+            print(f"Stage: {exception['source_stage']}")
+            print(f"Severity: {exception['severity']}")
+            print(f"Amount: {exception['amount']}")
+            print(f"Status: {exception['status']}")
+            print(f"Age days: {exception['age_days']}")
+            print(f"Age bucket: {exception['age_bucket']}")
+            print("---")
+
         return
 
     parser.print_help()
