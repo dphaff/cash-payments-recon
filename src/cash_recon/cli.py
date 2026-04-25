@@ -1,6 +1,7 @@
 import argparse
 
 from cash_recon import __version__
+from cash_recon.exceptions import classify_all_exceptions
 from cash_recon.io.bank_receipts import load_bank_receipts
 from cash_recon.io.internal_events import load_internal_events
 from cash_recon.io.psp_settlement import load_psp_settlement
@@ -101,6 +102,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the PSP settlement CSV file.",
     )
     reconcile_psp_bank_parser.add_argument(
+        "--bank",
+        required=True,
+        help="Path to the bank receipts CSV file.",
+    )
+
+    classify_exceptions_parser = subparsers.add_parser(
+        "classify-exceptions",
+        help="Classify reconciliation exceptions across all stages.",
+    )
+    classify_exceptions_parser.add_argument(
+        "--internal",
+        required=True,
+        help="Path to the internal events CSV file.",
+    )
+    classify_exceptions_parser.add_argument(
+        "--psp",
+        required=True,
+        help="Path to the PSP settlement CSV file.",
+    )
+    classify_exceptions_parser.add_argument(
         "--bank",
         required=True,
         help="Path to the bank receipts CSV file.",
@@ -215,6 +236,46 @@ def main() -> None:
             "Bank receipt missing expected payout: "
             f"{summary[BANK_RECEIPT_MISSING_EXPECTED_PAYOUT]}"
         )
+        return
+
+    if args.command == "classify-exceptions":
+        try:
+            internal_events = load_internal_events(args.internal)
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+            batch_totals = derive_psp_batch_totals(psp_rows)
+        except ValueError as error:
+            print(f"Input file invalid: {error}")
+            raise SystemExit(1)
+
+        internal_psp_results = reconcile_internal_to_psp(
+            internal_events=internal_events,
+            psp_rows=psp_rows,
+        )
+
+        psp_bank_results = reconcile_psp_batches_to_bank(
+            batch_totals=batch_totals,
+            bank_receipts=bank_receipts,
+        )
+
+        exceptions = classify_all_exceptions(
+            internal_psp_results=internal_psp_results,
+            psp_bank_results=psp_bank_results,
+        )
+
+        print("Exception classification complete")
+        print(f"Total exceptions: {len(exceptions)}")
+
+        for exception in exceptions:
+            print("---")
+            print(f"Type: {exception.exception_type}")
+            print(f"Stage: {exception.source_stage}")
+            print(f"Severity: {exception.severity}")
+            print(f"Merchant reference: {exception.merchant_reference}")
+            print(f"Settlement batch: {exception.settlement_batch_id}")
+            print(f"Amount: {exception.amount}")
+            print(f"Description: {exception.description}")
+
         return
 
     parser.print_help()
