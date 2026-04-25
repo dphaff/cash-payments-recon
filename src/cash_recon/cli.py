@@ -1,6 +1,7 @@
 import argparse
 
 from cash_recon import __version__
+from cash_recon.io.bank_receipts import load_bank_receipts
 from cash_recon.io.internal_events import load_internal_events
 from cash_recon.io.psp_settlement import load_psp_settlement
 
@@ -41,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the PSP settlement CSV file.",
     )
 
+    validate_bank_parser = subparsers.add_parser(
+        "validate-bank",
+        help="Validate a bank receipts CSV file.",
+    )
+
+    validate_bank_parser.add_argument(
+        "--bank",
+        required=True,
+        help="Path to the bank receipts CSV file.",
+    )
+
     return parser
 
 
@@ -70,6 +82,16 @@ def main() -> None:
             raise SystemExit(1)
 
         print(f"PSP file valid: {len(rows)} rows")
+        return
+
+    if args.command == "validate-bank":
+        try:
+            receipts = load_bank_receipts(args.bank)
+        except ValueError as error:
+            print(f"Bank file invalid: {error}")
+            raise SystemExit(1)
+
+        print(f"Bank file valid: {len(receipts)} rows")
         return
 
     parser.print_help()
