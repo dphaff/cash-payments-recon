@@ -1,0 +1,4 @@
+event_id,event_date,merchant_reference,event_type,gross_amount,currency
+INT001,2026-04-20,ORDER-1001,PAYMENT,25.00,GBP
+INT001,2026-04-20,ORDER-1001,PAYMENT,25.00,GBP
+INT002,2026-04-20,ORDER-1002,PAYMENT,40.00,GBP

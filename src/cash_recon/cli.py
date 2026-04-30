@@ -36,6 +36,8 @@ from cash_recon.recon.psp_bank import (
 )
 from cash_recon.recon.psp_batches import derive_psp_batch_totals
 
+from cash_recon.quality import check_all_duplicates, summarise_duplicate_results
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -68,6 +70,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate a bank receipts CSV file.",
     )
     validate_bank_parser.add_argument("--bank", required=True)
+
+    check_duplicates_parser = subparsers.add_parser(
+        "check-duplicates",
+        help="Check input files for duplicate records and duplicate match keys.",
+    )
+    check_duplicates_parser.add_argument("--internal", required=True)
+    check_duplicates_parser.add_argument("--psp", required=True)
+    check_duplicates_parser.add_argument("--bank", required=True)
 
     reconcile_internal_psp_parser = subparsers.add_parser(
         "reconcile-internal-psp",
@@ -200,6 +210,39 @@ def main() -> None:
             raise SystemExit(1)
 
         print(f"Bank file valid: {len(receipts)} rows")
+        return
+
+    if args.command == "check-duplicates":
+        try:
+            internal_events = load_internal_events(args.internal)
+            psp_rows = load_psp_settlement(args.psp)
+            bank_receipts = load_bank_receipts(args.bank)
+        except ValueError as error:
+            print(f"Input file invalid: {error}")
+            raise SystemExit(1)
+
+        duplicate_results = check_all_duplicates(
+            internal_events=internal_events,
+            psp_rows=psp_rows,
+            bank_receipts=bank_receipts,
+        )
+
+        summary = summarise_duplicate_results(duplicate_results)
+
+        print("Duplicate check complete")
+        print(f"Internal duplicate event IDs: {summary.internal_duplicate_event_ids}")
+        print(f"Internal duplicate match keys: {summary.internal_duplicate_match_keys}")
+        print(f"PSP duplicate transaction IDs: {summary.psp_duplicate_transaction_ids}")
+        print(f"PSP duplicate match keys: {summary.psp_duplicate_match_keys}")
+        print(f"Bank duplicate transaction IDs: {summary.bank_duplicate_transaction_ids}")
+        print(f"Bank duplicate references: {summary.bank_duplicate_references}")
+
+        for duplicate in duplicate_results:
+            print("---")
+            print(f"Type: {duplicate.duplicate_type}")
+            print(f"Value: {duplicate.duplicate_value}")
+            print(f"Count: {duplicate.count}")
+
         return
 
     if args.command == "reconcile-internal-psp":
