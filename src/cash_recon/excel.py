@@ -66,6 +66,7 @@ def _write_mi_summary_sheet(sheet, summary: MISummary) -> None:
         ("Internal missing in PSP", summary.internal_missing_in_psp_count),
         ("PSP missing in internal", summary.psp_missing_in_internal_count),
         ("PSP to bank matched", summary.psp_bank_matched_count),
+        ("PSP to bank matched with tolerance", summary.psp_bank_matched_with_tolerance_count,),
         (
             "Expected payout missing in bank",
             summary.expected_payout_missing_in_bank_count,
@@ -134,6 +135,7 @@ def _write_psp_bank_sheet(
             "bank_transaction_id",
             "expected_payout_amount",
             "bank_amount",
+            "amount_difference",
             "currency",
         ]
     )
@@ -150,10 +152,15 @@ def _write_psp_bank_sheet(
                     else None
                 ),
                 str(result.bank_amount) if result.bank_amount is not None else None,
+                (
+                    str(result.amount_difference)
+                    if result.amount_difference is not None
+                    else None
+                ),
                 result.currency,
             ]
         )
-
+        
     _format_header_row(sheet, row_number=1)
     _autofit_columns(sheet)
 

@@ -17,6 +17,7 @@ from cash_recon.recon.psp_bank import (
     BANK_RECEIPT_MISSING_EXPECTED_PAYOUT,
     EXPECTED_PAYOUT_MISSING_IN_BANK,
     MATCHED as PSP_BANK_MATCHED,
+    MATCHED_WITH_TOLERANCE as PSP_BANK_MATCHED_WITH_TOLERANCE,
     PSPBankReconResult,
 )
 from cash_recon.recon.psp_batches import PSPBatchTotal
@@ -33,6 +34,7 @@ class MISummary:
     internal_missing_in_psp_count: int
     psp_missing_in_internal_count: int
     psp_bank_matched_count: int
+    psp_bank_matched_with_tolerance_count: int
     expected_payout_missing_in_bank_count: int
     bank_receipt_missing_expected_payout_count: int
     total_exception_count: int
@@ -58,6 +60,10 @@ def build_mi_summary(
         psp_row_count=len(psp_rows),
         bank_receipt_count=len(bank_receipts),
         psp_batch_count=len(batch_totals),
+        psp_bank_matched_with_tolerance_count=_count_psp_bank_status(
+            psp_bank_results,
+            PSP_BANK_MATCHED_WITH_TOLERANCE,
+        ),
         internal_psp_matched_count=_count_internal_psp_status(
             internal_psp_results,
             INTERNAL_PSP_MATCHED,
@@ -116,6 +122,7 @@ def write_mi_summary_report(
         "internal_missing_in_psp_count",
         "psp_missing_in_internal_count",
         "psp_bank_matched_count",
+        "psp_bank_matched_with_tolerance_count",
         "expected_payout_missing_in_bank_count",
         "bank_receipt_missing_expected_payout_count",
         "total_exception_count",
@@ -139,6 +146,9 @@ def write_mi_summary_report(
                 "internal_missing_in_psp_count": summary.internal_missing_in_psp_count,
                 "psp_missing_in_internal_count": summary.psp_missing_in_internal_count,
                 "psp_bank_matched_count": summary.psp_bank_matched_count,
+                "psp_bank_matched_with_tolerance_count": (
+                    summary.psp_bank_matched_with_tolerance_count
+                ),
                 "expected_payout_missing_in_bank_count": (
                     summary.expected_payout_missing_in_bank_count
                 ),

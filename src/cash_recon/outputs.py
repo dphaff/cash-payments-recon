@@ -59,6 +59,7 @@ def write_psp_bank_report(
         "bank_transaction_id",
         "expected_payout_amount",
         "bank_amount",
+        "amount_difference",
         "currency",
     ]
 
@@ -80,6 +81,11 @@ def write_psp_bank_report(
                     "bank_amount": (
                         str(result.bank_amount)
                         if result.bank_amount is not None
+                        else None
+                    ),
+                    "amount_difference": (
+                        str(result.amount_difference)
+                        if result.amount_difference is not None
                         else None
                     ),
                     "currency": result.currency,

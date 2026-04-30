@@ -1,4 +1,5 @@
 import argparse
+from decimal import Decimal
 
 from cash_recon import __version__
 from cash_recon.db import (
@@ -19,6 +20,7 @@ from cash_recon.outputs import (
     write_internal_psp_report,
     write_psp_bank_report,
 )
+from cash_recon.quality import check_all_duplicates, summarise_duplicate_results
 from cash_recon.recon.internal_psp import (
     INTERNAL_MISSING_IN_PSP,
     MATCHED as INTERNAL_PSP_MATCHED,
@@ -31,12 +33,11 @@ from cash_recon.recon.psp_bank import (
     BANK_RECEIPT_MISSING_EXPECTED_PAYOUT,
     EXPECTED_PAYOUT_MISSING_IN_BANK,
     MATCHED as PSP_BANK_MATCHED,
+    MATCHED_WITH_TOLERANCE as PSP_BANK_MATCHED_WITH_TOLERANCE,
     reconcile_psp_batches_to_bank,
     summarise_psp_bank_results,
 )
 from cash_recon.recon.psp_batches import derive_psp_batch_totals
-
-from cash_recon.quality import check_all_duplicates, summarise_duplicate_results
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconcile_psp_bank_parser.add_argument("--psp", required=True)
     reconcile_psp_bank_parser.add_argument("--bank", required=True)
+    reconcile_psp_bank_parser.add_argument(
+        "--amount-tolerance",
+        default="0.00",
+        help="Allowed amount difference for PSP-to-bank matching.",
+    )
 
     classify_exceptions_parser = subparsers.add_parser(
         "classify-exceptions",
@@ -106,6 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
     classify_exceptions_parser.add_argument("--internal", required=True)
     classify_exceptions_parser.add_argument("--psp", required=True)
     classify_exceptions_parser.add_argument("--bank", required=True)
+    classify_exceptions_parser.add_argument(
+        "--amount-tolerance",
+        default="0.00",
+        help="Allowed amount difference for PSP-to-bank matching.",
+    )
 
     init_db_parser = subparsers.add_parser(
         "init-db",
@@ -134,6 +145,11 @@ def build_parser() -> argparse.ArgumentParser:
     persist_exceptions_parser.add_argument("--internal", required=True)
     persist_exceptions_parser.add_argument("--psp", required=True)
     persist_exceptions_parser.add_argument("--bank", required=True)
+    persist_exceptions_parser.add_argument(
+        "--amount-tolerance",
+        default="0.00",
+        help="Allowed amount difference for PSP-to-bank matching.",
+    )
 
     list_open_exceptions_parser = subparsers.add_parser(
         "list-open-exceptions",
@@ -150,6 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
     export_reports_parser.add_argument("--psp", required=True)
     export_reports_parser.add_argument("--bank", required=True)
     export_reports_parser.add_argument("--outdir", required=True)
+    export_reports_parser.add_argument(
+        "--amount-tolerance",
+        default="0.00",
+        help="Allowed amount difference for PSP-to-bank matching.",
+    )
 
     export_mi_summary_parser = subparsers.add_parser(
         "export-mi-summary",
@@ -160,6 +181,11 @@ def build_parser() -> argparse.ArgumentParser:
     export_mi_summary_parser.add_argument("--psp", required=True)
     export_mi_summary_parser.add_argument("--bank", required=True)
     export_mi_summary_parser.add_argument("--outdir", required=True)
+    export_mi_summary_parser.add_argument(
+        "--amount-tolerance",
+        default="0.00",
+        help="Allowed amount difference for PSP-to-bank matching.",
+    )
 
     export_excel_parser = subparsers.add_parser(
         "export-excel",
@@ -170,6 +196,11 @@ def build_parser() -> argparse.ArgumentParser:
     export_excel_parser.add_argument("--psp", required=True)
     export_excel_parser.add_argument("--bank", required=True)
     export_excel_parser.add_argument("--outdir", required=True)
+    export_excel_parser.add_argument(
+        "--amount-tolerance",
+        default="0.00",
+        help="Allowed amount difference for PSP-to-bank matching.",
+    )
 
     return parser
 
@@ -299,12 +330,14 @@ def main() -> None:
         results = reconcile_psp_batches_to_bank(
             batch_totals=batch_totals,
             bank_receipts=bank_receipts,
+            amount_tolerance=Decimal(args.amount_tolerance),
         )
 
         summary = summarise_psp_bank_results(results)
 
         print("PSP to bank reconciliation complete")
         print(f"Matched: {summary[PSP_BANK_MATCHED]}")
+        print(f"Matched with tolerance: {summary[PSP_BANK_MATCHED_WITH_TOLERANCE]}")
         print(
             "Expected payout missing in bank: "
             f"{summary[EXPECTED_PAYOUT_MISSING_IN_BANK]}"
@@ -333,6 +366,7 @@ def main() -> None:
         psp_bank_results = reconcile_psp_batches_to_bank(
             batch_totals=batch_totals,
             bank_receipts=bank_receipts,
+            amount_tolerance=Decimal(args.amount_tolerance),
         )
 
         exceptions = classify_all_exceptions(
@@ -390,6 +424,7 @@ def main() -> None:
             psp_bank_results = reconcile_psp_batches_to_bank(
                 batch_totals=batch_totals,
                 bank_receipts=bank_receipts,
+                amount_tolerance=Decimal(args.amount_tolerance),
             )
 
             exceptions = classify_all_exceptions(
@@ -457,6 +492,7 @@ def main() -> None:
             psp_bank_results = reconcile_psp_batches_to_bank(
                 batch_totals=batch_totals,
                 bank_receipts=bank_receipts,
+                amount_tolerance=Decimal(args.amount_tolerance),
             )
 
             exceptions = classify_all_exceptions(
@@ -511,6 +547,7 @@ def main() -> None:
             psp_bank_results = reconcile_psp_batches_to_bank(
                 batch_totals=batch_totals,
                 bank_receipts=bank_receipts,
+                amount_tolerance=Decimal(args.amount_tolerance),
             )
 
             exceptions = classify_all_exceptions(
@@ -563,6 +600,7 @@ def main() -> None:
             psp_bank_results = reconcile_psp_batches_to_bank(
                 batch_totals=batch_totals,
                 bank_receipts=bank_receipts,
+                amount_tolerance=Decimal(args.amount_tolerance),
             )
 
             exceptions = classify_all_exceptions(

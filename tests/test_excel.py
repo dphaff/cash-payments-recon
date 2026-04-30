@@ -121,5 +121,5 @@ def test_write_excel_workbook_contains_mi_summary_values(tmp_path):
     assert sheet["B1"].value == "Value"
     assert sheet["A2"].value == "Run ID"
     assert sheet["B2"].value == "RUN-TEST"
-    assert sheet["A13"].value == "Total exceptions"
-    assert sheet["B13"].value == 2
+    assert sheet["A14"].value == "Total exceptions"
+    assert sheet["B14"].value == 2
