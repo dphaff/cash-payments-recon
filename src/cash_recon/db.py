@@ -30,6 +30,61 @@ def initialise_database(db_path: str) -> None:
 
         connection.execute(
             """
+            CREATE VIEW IF NOT EXISTS vw_open_exceptions_by_type AS
+            SELECT
+                exception_type,
+                COUNT(*) AS exception_count
+            FROM exception_queue
+            WHERE status = 'OPEN'
+            GROUP BY exception_type
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE VIEW IF NOT EXISTS vw_open_exceptions_by_severity AS
+            SELECT
+                severity,
+                COUNT(*) AS exception_count
+            FROM exception_queue
+            WHERE status = 'OPEN'
+            GROUP BY severity
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE VIEW IF NOT EXISTS vw_open_exceptions_by_age_bucket AS
+            SELECT
+                CASE
+                    WHEN CAST(julianday('now') - julianday(created_at) AS INTEGER) <= 1
+                        THEN '0-1 days'
+                    WHEN CAST(julianday('now') - julianday(created_at) AS INTEGER) <= 3
+                        THEN '2-3 days'
+                    WHEN CAST(julianday('now') - julianday(created_at) AS INTEGER) <= 7
+                        THEN '4-7 days'
+                    ELSE '8+ days'
+                END AS age_bucket,
+                COUNT(*) AS exception_count
+            FROM exception_queue
+            WHERE status = 'OPEN'
+            GROUP BY age_bucket
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE VIEW IF NOT EXISTS vw_run_history_by_status AS
+            SELECT
+                status,
+                COUNT(*) AS run_count
+            FROM run_history
+            GROUP BY status
+            """
+        )
+
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS exception_queue (
                 exception_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,
@@ -222,3 +277,76 @@ def calculate_age_bucket(age_days: int) -> str:
         return "4-7 days"
 
     return "8+ days"
+
+def fetch_open_exceptions_by_type(db_path: str) -> list[sqlite3.Row]:
+    initialise_database(db_path)
+
+    with connect_to_database(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                exception_type,
+                exception_count
+            FROM vw_open_exceptions_by_type
+            ORDER BY exception_type
+            """
+        ).fetchall()
+
+    return rows
+
+
+def fetch_open_exceptions_by_severity(db_path: str) -> list[sqlite3.Row]:
+    initialise_database(db_path)
+
+    with connect_to_database(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                severity,
+                exception_count
+            FROM vw_open_exceptions_by_severity
+            ORDER BY severity
+            """
+        ).fetchall()
+
+    return rows
+
+
+def fetch_open_exceptions_by_age_bucket(db_path: str) -> list[sqlite3.Row]:
+    initialise_database(db_path)
+
+    with connect_to_database(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                age_bucket,
+                exception_count
+            FROM vw_open_exceptions_by_age_bucket
+            ORDER BY
+                CASE age_bucket
+                    WHEN '0-1 days' THEN 1
+                    WHEN '2-3 days' THEN 2
+                    WHEN '4-7 days' THEN 3
+                    ELSE 4
+                END
+            """
+        ).fetchall()
+
+    return rows
+
+
+def fetch_run_history_by_status(db_path: str) -> list[sqlite3.Row]:
+    initialise_database(db_path)
+
+    with connect_to_database(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                status,
+                run_count
+            FROM vw_run_history_by_status
+            ORDER BY status
+            """
+        ).fetchall()
+
+    return rows

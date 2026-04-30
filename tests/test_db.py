@@ -11,6 +11,10 @@ from cash_recon.db import (
     initialise_database,
     persist_exceptions,
     record_run,
+    fetch_open_exceptions_by_age_bucket,
+    fetch_open_exceptions_by_severity,
+    fetch_open_exceptions_by_type,
+    fetch_run_history_by_status,
 )
 from cash_recon.exceptions import ReconException
 
@@ -151,3 +155,157 @@ def test_fetch_open_exceptions_with_ageing(tmp_path):
     assert rows[0]["status"] == "OPEN"
     assert rows[0]["age_days"] >= 0
     assert rows[0]["age_bucket"] == "0-1 days"
+
+def test_sql_mi_views_are_created(tmp_path):
+    db_path = tmp_path / "test_recon.sqlite3"
+
+    initialise_database(str(db_path))
+
+    with sqlite3.connect(db_path) as connection:
+        views = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'view'
+            ORDER BY name
+            """
+        ).fetchall()
+
+    view_names = [view[0] for view in views]
+
+    assert "vw_open_exceptions_by_type" in view_names
+    assert "vw_open_exceptions_by_severity" in view_names
+    assert "vw_open_exceptions_by_age_bucket" in view_names
+    assert "vw_run_history_by_status" in view_names
+
+
+def test_fetch_open_exceptions_by_type(tmp_path):
+    db_path = tmp_path / "test_recon.sqlite3"
+
+    exceptions = [
+        ReconException(
+            exception_type="MISSING_BANK_RECEIPT",
+            source_stage="PSP_TO_BANK",
+            severity="HIGH",
+            merchant_reference=None,
+            settlement_batch_id="BATCH-001",
+            amount=Decimal("37.05"),
+            description="Expected PSP payout was not found in bank.",
+        ),
+        ReconException(
+            exception_type="MISSING_BANK_RECEIPT",
+            source_stage="PSP_TO_BANK",
+            severity="HIGH",
+            merchant_reference=None,
+            settlement_batch_id="BATCH-002",
+            amount=Decimal("25.00"),
+            description="Expected PSP payout was not found in bank.",
+        ),
+    ]
+
+    persist_exceptions(
+        db_path=str(db_path),
+        run_id="RUN-001",
+        exceptions=exceptions,
+    )
+
+    rows = fetch_open_exceptions_by_type(str(db_path))
+
+    assert len(rows) == 1
+    assert rows[0]["exception_type"] == "MISSING_BANK_RECEIPT"
+    assert rows[0]["exception_count"] == 2
+
+
+def test_fetch_open_exceptions_by_severity(tmp_path):
+    db_path = tmp_path / "test_recon.sqlite3"
+
+    exceptions = [
+        ReconException(
+            exception_type="MISSING_BANK_RECEIPT",
+            source_stage="PSP_TO_BANK",
+            severity="HIGH",
+            merchant_reference=None,
+            settlement_batch_id="BATCH-001",
+            amount=Decimal("37.05"),
+            description="Expected PSP payout was not found in bank.",
+        ),
+        ReconException(
+            exception_type="UNEXPECTED_BANK_RECEIPT",
+            source_stage="PSP_TO_BANK",
+            severity="MEDIUM",
+            merchant_reference=None,
+            settlement_batch_id=None,
+            amount=Decimal("99.99"),
+            description="Bank receipt was not explained by PSP settlement.",
+        ),
+    ]
+
+    persist_exceptions(
+        db_path=str(db_path),
+        run_id="RUN-001",
+        exceptions=exceptions,
+    )
+
+    rows = fetch_open_exceptions_by_severity(str(db_path))
+
+    counts_by_severity = {
+        row["severity"]: row["exception_count"]
+        for row in rows
+    }
+
+    assert counts_by_severity["HIGH"] == 1
+    assert counts_by_severity["MEDIUM"] == 1
+
+
+def test_fetch_open_exceptions_by_age_bucket(tmp_path):
+    db_path = tmp_path / "test_recon.sqlite3"
+
+    exceptions = [
+        ReconException(
+            exception_type="MISSING_BANK_RECEIPT",
+            source_stage="PSP_TO_BANK",
+            severity="HIGH",
+            merchant_reference=None,
+            settlement_batch_id="BATCH-001",
+            amount=Decimal("37.05"),
+            description="Expected PSP payout was not found in bank.",
+        )
+    ]
+
+    persist_exceptions(
+        db_path=str(db_path),
+        run_id="RUN-001",
+        exceptions=exceptions,
+    )
+
+    rows = fetch_open_exceptions_by_age_bucket(str(db_path))
+
+    assert len(rows) == 1
+    assert rows[0]["age_bucket"] == "0-1 days"
+    assert rows[0]["exception_count"] == 1
+
+
+def test_fetch_run_history_by_status(tmp_path):
+    db_path = tmp_path / "test_recon.sqlite3"
+
+    record_run(
+        db_path=str(db_path),
+        run_id="RUN-001",
+        status="SUCCESS",
+    )
+
+    record_run(
+        db_path=str(db_path),
+        run_id="RUN-002",
+        status="FAILED",
+    )
+
+    rows = fetch_run_history_by_status(str(db_path))
+
+    counts_by_status = {
+        row["status"]: row["run_count"]
+        for row in rows
+    }
+
+    assert counts_by_status["SUCCESS"] == 1
+    assert counts_by_status["FAILED"] == 1

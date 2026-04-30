@@ -2,12 +2,18 @@ import argparse
 from decimal import Decimal
 
 from cash_recon import __version__
+
 from cash_recon.db import (
+    fetch_open_exceptions_by_age_bucket,
+    fetch_open_exceptions_by_severity,
+    fetch_open_exceptions_by_type,
     fetch_open_exceptions_with_ageing,
+    fetch_run_history_by_status,
     initialise_database,
     persist_exceptions,
     record_run,
 )
+
 from cash_recon.excel import write_excel_workbook
 from cash_recon.exceptions import classify_all_exceptions
 from cash_recon.io.bank_receipts import load_bank_receipts
@@ -156,6 +162,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="List open exceptions with ageing.",
     )
     list_open_exceptions_parser.add_argument("--db", required=True)
+
+    show_sql_mi_parser = subparsers.add_parser(
+        "show-sql-mi",
+        help="Show MI summaries from SQLite SQL views.",
+    )
+    show_sql_mi_parser.add_argument("--db", required=True)
 
     export_reports_parser = subparsers.add_parser(
         "export-reports",
@@ -476,6 +488,43 @@ def main() -> None:
 
         return
 
+    if args.command == "show-sql-mi":
+        exceptions_by_type = fetch_open_exceptions_by_type(args.db)
+        exceptions_by_severity = fetch_open_exceptions_by_severity(args.db)
+        exceptions_by_age_bucket = fetch_open_exceptions_by_age_bucket(args.db)
+        runs_by_status = fetch_run_history_by_status(args.db)
+
+        print("SQL MI summary")
+
+        print("Open exceptions by type")
+        if not exceptions_by_type:
+            print("None")
+        for row in exceptions_by_type:
+            print(f"{row['exception_type']}: {row['exception_count']}")
+
+        print("")
+        print("Open exceptions by severity")
+        if not exceptions_by_severity:
+            print("None")
+        for row in exceptions_by_severity:
+            print(f"{row['severity']}: {row['exception_count']}")
+
+        print("")
+        print("Open exceptions by age bucket")
+        if not exceptions_by_age_bucket:
+            print("None")
+        for row in exceptions_by_age_bucket:
+            print(f"{row['age_bucket']}: {row['exception_count']}")
+
+        print("")
+        print("Run history")
+        if not runs_by_status:
+            print("None")
+        for row in runs_by_status:
+            print(f"{row['status']}: {row['run_count']}")
+
+        return
+    
     if args.command == "export-reports":
         try:
             internal_events = load_internal_events(args.internal)
